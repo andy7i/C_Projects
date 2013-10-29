@@ -1,0 +1,374 @@
+//Andrew Jang & Andrew Dempsey
+//12/10/12
+
+//r0 always holds zero
+//r1 does three things: 1) it can hold a return pointer, 2) holds the input,
+    // and can also be used as a 'temp'
+//r2 holds a pointer to the stack
+//r3 holds the state (waiting or entering)
+    // this is only useful when entering digits so it is often used as a temp
+//r4 holds the current length of stack
+//r5 is used as a temp
+//r6 and r7 are temporary registers used by the system
+
+// data structure: stack implementation is done with a section
+// invariant: the stack length is always held in r4
+
+.zero r0
+.temps r6, r7
+
+.section rodata
+    jumptable:
+    .space 256
+
+.section init
+
+// initializes jumptable
+init_jtable:
+    push r1 on stack r2
+    push r4 on stack r2
+    push r3 on stack r2
+    r4 := 0
+    goto init_jumptable
+
+// repeats top section to initialize jumptable
+// and fills in the special cases
+init_jumptable:
+    r3 := jumptable + r4
+    m[r0][r3] := print_error_msg
+    r4 := r4 + 1
+    r5 := r4 - 256
+    if (r5 != 0) goto init_jumptable    // fills 255 spots of the jumptable
+
+    m[r0][jumptable + '0'] := digits
+    m[r0][jumptable + '1'] := digits
+    m[r0][jumptable + '2'] := digits
+    m[r0][jumptable + '3'] := digits
+    m[r0][jumptable + '4'] := digits
+    m[r0][jumptable + '5'] := digits
+    m[r0][jumptable + '6'] := digits
+    m[r0][jumptable + '7'] := digits
+    m[r0][jumptable + '8'] := digits
+    m[r0][jumptable + '9'] := digits
+
+    m[r0][jumptable + ' '] := waiting
+    m[r0][jumptable + '\n'] := print_stack
+    m[r0][jumptable + '+'] := add
+    m[r0][jumptable + '-'] := sub
+    m[r0][jumptable + '*'] := mul
+    m[r0][jumptable + '/'] := div
+    m[r0][jumptable + '|'] := or
+    m[r0][jumptable + '&'] := and
+    m[r0][jumptable + 'c'] := neg
+    m[r0][jumptable + '~'] := com
+    m[r0][jumptable + 's'] := swap
+    m[r0][jumptable + 'd'] := dup
+    m[r0][jumptable + 'p'] := pop_stack
+    m[r0][jumptable + 'z'] := clear_stack
+
+    pop r3 off stack r2
+    pop r4 off stack r2
+    pop r1 off stack r2
+    r4 := 0
+
+
+.section text
+
+main:
+    goto waiting
+
+//get one character of input from user and place into r1
+//r3 is reset to 0 ( == is in waiting state)
+waiting:
+    r3 := 0
+    r1 := input()
+    goto handle_input
+
+// get another character of input from user and put in r1
+// only gets called when previous input was a digit.
+// sets r3 (state-holder) to 1 ( == is in entering state)
+entering:
+    r3 := 1
+    r1 := input()
+    goto handle_input
+
+// handles input, goes to the appropriate point in the jumptable
+handle_input:
+    r5 := r1 + 1                    // test to see if r1 signals end of file,
+    if (r5 == 0) goto end_prog        // and if so, go to end of program
+    
+  // branch indirect through jump table
+  r5 := jumptable + r1
+  r5 := m[r0][r5]
+  goto r5
+
+print_error_msg:
+    output "Unknown character \'"
+    output r1
+    output "\'\n"
+    goto waiting
+
+end_prog:
+    halt
+
+
+// OPERATIONS START HERE
+
+// pushes number (converted from ASCII to decimal) onto the stack,
+// r4 gets new stack length
+// depending on the state (either waiting or entering, as noted in r3),
+    // this function will either continue building a number 
+    // or will start a new one
+digits:
+    r1 := r1 - '0'
+    r3 := r3 - 1
+    if (r3 == 0) goto digits_entering
+
+    push r1 on stack r2
+    r4 := r4 + 1
+    goto entering
+
+// continues reading in a number (called when state is entering state)
+// replaces top number in stack by multiplying it by 10 and adding value
+// from register r1.
+// r1 gets input again and goes to the input-handling function
+digits_entering:
+    pop r5 off stack r2
+    r5 := r5 * 10
+    r5 := r5 + r1
+    push r5 on stack r2
+    goto entering
+
+// prints out everything in stack
+print_stack:
+    r3 := 0        // r3 is the incrementer
+    goto print_stack_recur
+    goto waiting
+
+// recursively increments a counter and calls printd on every element
+// from the top of the stack to the nth element
+print_stack_recur:
+    if (r4 == 0) goto waiting
+    goto printd linking r1
+    r3 := r3 + 1
+    r5 := r4 - r3
+    if (r5 != 0) goto print_stack_recur
+    goto waiting
+
+// r5 gets stack[n] + stack[n-1] and pushed onto stack
+// r4 gets decremented to keep track of stack length
+// goes to waiting state
+add:
+    goto check2 linking r1
+    pop r1 off stack r2
+    pop r5 off stack r2
+    r1 := r1 + r5
+    push r1 on stack r2
+    r4 := r4 - 1
+    goto waiting
+
+// r5 gets stack[n] - stack[n-1] and pushed onto stack
+// r4 gets decremented to keep track of stack length
+// goes to waiting state
+sub:
+    goto check2 linking r1
+    pop r1 off stack r2
+    pop r5 off stack r2
+    r5 := r5 - r1
+    push r5 on stack r2
+    r4 := r4 - 1
+    goto waiting
+
+
+// r5 gets stack[n] * stack[n-1] and pushed onto stack
+// r4 gets decremented to keep track of stack length
+// goes to waiting state
+mul:
+    goto check2 linking r1
+    pop r1 off stack r2
+    pop r5 off stack r2
+    r5 := r5 * r1
+    push r5 on stack r2
+    r4 := r4 - 1
+    goto waiting
+
+
+// r5 gets stack[n] / stack[n-1] and pushed onto stack
+// r4 gets decremented to keep track of stack length
+// goes to waiting state
+div:
+    goto check2 linking r1
+    pop r1 off stack r2
+    pop r5 off stack r2
+    if (r1 == 0) goto div_cancel
+
+    r3 := r5 & 2147483648        // checks if x is pos or neg
+    if (r3 != 0) goto div_x_neg
+    goto div_x_pos
+
+// the following 6 labels handle the different cases
+// of x and y being negative and assigning the appropriate
+// values accordingly; in general, r1 gets the value of
+// stack[n] / stack[n-1]
+div_x_pos:
+    r3 := r1 & 2147483648        // checks if y is pos or neg
+    if (r3 != 0) goto div_x_pos_y_neg
+    goto div_x_pos_y_pos
+
+div_x_pos_y_neg:
+    r1 := -r1
+    r1 := r5 / r1
+    r1 := -r1
+    push r1 on stack r2
+    r4 := r4 - 1
+    goto waiting
+
+div_x_pos_y_pos:
+    r1 := r5 / r1
+    push r1 on stack r2
+    r4 := r4 - 1
+    goto waiting
+
+div_x_neg:
+    r5 := -r5
+    r3 := r1 & 2147483648    // checks if y is pos or neg
+    if (r3 != 0) goto div_x_neg_y_neg
+    goto div_x_neg_y_pos
+
+div_x_neg_y_neg:
+    r1 := -r1
+    r1 := r5 / r1
+    push r1 on stack r2
+    r4 := r4 - 1
+    goto waiting
+
+div_x_neg_y_pos:
+    r1 := r5 / r1
+    r1 := -r1
+    push r1 on stack r2
+    r4 := r4 - 1
+    goto waiting
+
+// when dividing by zero, both numbers are pushed back on the stack
+div_cancel:
+    output "Division by zero\n"
+    push r5 on stack r2
+    push r1 on stack r2
+    goto waiting
+
+// r5 gets stack[n] | stack[n-1] and pushed onto stack
+// r4 gets decremented to keep track of stack length
+// goes to waiting state
+or:
+    goto check2 linking r1
+    pop r1 off stack r2
+    pop r5 off stack r2
+
+    r5 := r5 | r1
+    push r5 on stack r2
+    r4 := r4 - 1
+    goto waiting
+
+// r5 gets stack[n] & stack[n-1] and pushed onto stack
+// r4 gets decremented to keep track of stack length
+// goes to waiting state
+and:
+    goto check2 linking r1
+    pop r1 off stack r2
+    pop r5 off stack r2
+
+    r5 := r5 & r1
+    push r5 on stack r2
+    r4 := r4 - 1
+    goto waiting
+
+// stack[n] is replaced with the negative of stack[n]
+// goes to waiting state
+neg:
+    goto check1 linking r1
+    pop r1 off stack r2
+    r1 := -r1
+    push r1 on stack r2
+    goto waiting
+
+// stack[n] is replaced with the complement of stack[n]
+// goes to waiting state
+com:
+    goto check1 linking r1
+    pop r1 off stack r2
+    r1 := ~r1
+    push r1 on stack r2
+    goto waiting
+
+// stack[n] is swapped with stack[n-1]
+// goes to waiting state
+swap:
+    goto check2 linking r1
+    pop r1 off stack r2
+    pop r5 off stack r2
+    
+    push r1 on stack r2
+    push r5 on stack r2
+    goto waiting
+
+// stack[n] is duplicated and pushed onto the stack
+// r4 gets incremented to keep track of stack length
+// goes to waiting state
+dup:
+    goto check1 linking r1
+    pop r1 off stack r2
+    r5 := r1
+    push r5 on stack r2
+    push r1 on stack r2
+    r4 := r4 + 1
+    goto waiting
+
+// removes stack[n] from stack
+// r4 gets decremented to keep track of stack length
+// goes to waiting state
+pop_stack:
+    goto check1 linking r1
+    pop r1 off stack r2
+    r4 := r4 - 1
+    goto waiting
+
+// removes all values from stack recursively
+// r4 gets decremented to keep track of stack value at each recursion
+// goes to waiting state when stack is empty
+clear_stack:
+    if (r4 == 0) goto waiting
+    pop r1 off stack r2
+    r4 := r4 - 1
+    goto clear_stack
+
+// check funciton for stack length
+// prints error message if stack contains less than 1 number and returns
+check1:
+    if (r4 != 0) goto r1
+    r5 := 1
+    goto print_error_no_numbers
+
+// check funciton for stack length
+// prints error message if stack contains less than 2 numbers and returns
+check2:
+    r5 := r4 / 2
+    if (r5 != 0) goto r1
+    r5 := 2
+    goto print_error_no_numbers
+
+// prints stack underflow error message
+// r5 contains the number of required elements in stack
+// returns to waiting state
+print_error_no_numbers:
+    output "Stack underflow---expected at least "
+    output r5 + '0'
+    output " element"
+    r3 := r5 - 1
+    if (r3 == 0) goto output_newline
+    output 's'
+    output "\n"
+    goto waiting
+    
+output_newline:
+    output '\n'
+    goto waiting

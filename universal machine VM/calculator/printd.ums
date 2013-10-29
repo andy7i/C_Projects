@@ -1,0 +1,66 @@
+// r0 is zero
+// r6 and r7 are temporary registers
+
+.zero r0
+.temps r6, r7
+
+.section text
+
+// r1 contains return address
+// r3 keeps track of the number of digits in the given number
+// r4 contains the numbers to push onto the stack
+// r5 contains the given number to print
+printd:
+	output ">>> "		// this function is only called when there are
+	push r1 on stack r2		// numbers in the stack
+	push r3 on stack r2
+	push r4 on stack r2
+	push r5 on stack r2
+	r5 := r3 + 4
+	r5 := r5 + r2
+	r5 := m[r0][r5]	// r5 is the number to be printed
+	r3 := 0			// r3 is the incrementer
+	goto check_if_neg linking r1
+	goto recur
+
+check_if_neg:
+	r4 := r5 & 2147483648
+	if (r4 != 0) goto handle_neg
+	goto r1
+
+// outputs '-' character, converts number contained in r5
+// to its twos-complement negation, and returns
+handle_neg:
+	output '-'
+	r5 := -r5
+	goto r1
+
+// recursively iterates through number contained in r5
+// and pushes each digit onto the stack
+recur:
+	r3 := r3 + 1
+	r4 := r5 mod 10
+	push r4 on stack r2
+	r5 := r5 / 10
+	if (r5 != 0) goto recur
+	goto recurPop
+
+// pops each digit from number off stack and outputs
+// proper ASCII character
+recurPop:
+// start popping
+	if (r3 == 0) goto printd_end
+	pop r4 off stack r2
+	output r4 + 48
+	r3 := r3 - 1
+	goto recurPop
+
+// outputs newline character and returns
+printd_end:
+	output '\n'
+	pop r5 off stack r2
+	pop r4 off stack r2
+	pop r3 off stack r2
+	pop r1 off stack r2
+	goto r1		// should go here!
+

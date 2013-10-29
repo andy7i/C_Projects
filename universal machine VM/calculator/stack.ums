@@ -1,0 +1,6 @@
+.zero r0
+.section stk
+.space 100000
+endstack:
+.section init
+r2 := endstack

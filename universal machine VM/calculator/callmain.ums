@@ -1,0 +1,7 @@
+.zero r0
+.temps r6, r7
+
+// calls main
+.section init
+	goto main
+	halt
