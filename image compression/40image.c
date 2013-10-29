@@ -37,20 +37,6 @@ int main(int argc, char *argv[]) {
   } else {
     compress_or_decompress(stdin);
   }
-
-	uint64_t x = 31;
-	unsigned width = 5;
-	int64_t y = -14;
-if(Bitpack_fitsu(x, width)){
-	fprintf(stderr, "it worked\n");
-}
-if(Bitpack_fitss(y, width)){
-	fprintf(stderr, "it worked\n");
-}
-uint64_t z = (100 << 4);
-x = Bitpack_getu(z, 3, 4);
-fprintf(stderr, "x = %u", (unsigned) x);
-
     return 0;
 
 }
